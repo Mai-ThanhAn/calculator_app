@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:math_expressions/math_expressions.dart';
 import 'colors.dart';
 
 class CalculatorScreen extends StatefulWidget {
@@ -10,67 +9,141 @@ class CalculatorScreen extends StatefulWidget {
 }
 
 class _CalculatorScreenState extends State<CalculatorScreen> {
-  // Variable stores input expression
-  // Biến lưu trữ biểu thức nhập vào
-  String input = "";
-  // Variable to store the result
-  // Biến lưu trữ kết quả
-  String result = "0000";
+  // --- 1. State Variables (Step 4 Requirement) ---
+  String _display = '0000';      // Current display value
+  String _equation = '';         // Full equation string
+  double _num1 = 0;              // First operand
+  double _num2 = 0;              // Second operand
+  String _operation = '';        // Current operation
+  
+  // Helper variable to check if user just pressed an operator
+  // If true, next number input will reset the display
+  bool _shouldStartNewInput = false; 
 
-  // Function to handle when pressing the button
-  // Hàm xử lý khi nhấn nút
+  // --- 2. Logic (Button Functions) ---
   void onBtnTap(String value) {
     setState(() {
-      if (value == "C") {
-        // Reset all
-        input = "";
-        result = "0000";
-      } else if (value == "=") {
-        try {
-          // 1. Normalize the expression:
-          // 1. Chuẩn hóa biểu thức: 
-          // The library does not understand '×' and '÷', need to change to '*' and '/'
-          // Thư viện không hiểu '×' và '÷', cần đổi thành '*' và '/'
-          String finalUserInput = input;
-          finalUserInput = finalUserInput.replaceAll('×', '*');
-          finalUserInput = finalUserInput.replaceAll('÷', '/');
-
-          // 2. Use math_expressions to calculate
-          // 2. Sử dụng math_expressions để tính
-          Parser p = Parser();
-          Expression exp = p.parse(finalUserInput);
-          ContextModel cm = ContextModel();
-
-          double eval = exp.evaluate(EvaluationType.REAL, cm);
-
-          // 3. Beautify the result (Remove the trailing zero if it is an integer)
-          // 3. Làm đẹp kết quả (Xóa số 0 ở cuối nếu là số nguyên)
-          String evalStr = eval.toString();
-          if (evalStr.endsWith(".0")) {
-            result = evalStr.substring(0, evalStr.length - 2);
-          } else {
-            result = evalStr;
-          }
-        } catch (e) {
-          // If the syntax is incorrect
-          // Nếu nhập sai cú pháp
-          result = "Error";
-        }
-      } else if (value == "+/-") {
-        // Logic to change the sign (currently simply add a minus sign at the beginning)
-        // Logic đổi dấu (hiện chỉ đơn giản thêm dấu trừ ở đầu)
-        if (input.isNotEmpty) {
-          input += "-";
-        }
-      } else {
-        // Logic to enter numbers and normal calculations
-         // Logic nhập số và phép tính thông thường
-        if (input.length < 15) {
-          input += value;
-          result = input;
-        }
+      // Handle button types
+      if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].contains(value)) {
+        _handleNumber(value);
+      } else if (['+', '-', '×', '÷'].contains(value)) {
+        _handleOperation(value);
+      } else if (value == '=') {
+        _calculateResult();
+      } else if (value == 'C') {
+        _clearAll();
+      } else if (value == '.') {
+        _addDecimal();
+      } else if (value == '+/-') {
+        _toggleSign();
+      } else if (value == '%') {
+        _calculatePercentage();
       }
     });
+  }
+
+  // Handle number buttons
+  void _handleNumber(String value) {
+    if (_display == '0000' || _shouldStartNewInput) {
+      _display = value;
+      _shouldStartNewInput = false;
+    } else {
+      if (_display.length < 15) {
+        _display += value;
+      }
+    }
+  }
+
+  // Handle operations (+, -, ×, ÷)
+  void _handleOperation(String value) {
+    if (_operation.isNotEmpty && !_shouldStartNewInput) {
+      _calculateResult();
+    }
+
+    _num1 = double.parse(_display.replaceAll(',', '')); // Save first operand
+    _operation = value; // Save operation
+    _equation = "$_display $value"; // Update equation text
+    _shouldStartNewInput = true;
+  }
+
+  // Calculate result (=)
+  void _calculateResult() {
+    if (_operation.isEmpty) return;
+
+    _num2 = double.parse(_display.replaceAll(',', '')); // Save second operand
+    
+    double result = 0;
+    switch (_operation) {
+      case '+':
+        result = _num1 + _num2;
+        break;
+      case '-':
+        result = _num1 - _num2;
+        break;
+      case '×':
+        result = _num1 * _num2;
+        break;
+      case '÷':
+        if (_num2 != 0) {
+          result = _num1 / _num2;
+        } else {
+          _display = "Error"; // Cannot divide by 0
+          _operation = '';
+          return;
+        }
+        break;
+    }
+
+    // Update result
+    _display = _formatResult(result);
+    _equation = "";
+    _operation = ''; // Reset operation
+    _shouldStartNewInput = true; // Prepare for new operation from this result
+  }
+
+  // Reset (C)
+  void _clearAll() {
+    _display = '0000';
+    _equation = '';
+    _num1 = 0;
+    _num2 = 0;
+    _operation = '';
+  }
+
+  // Add decimal point (.)
+  void _addDecimal() {
+    if (_shouldStartNewInput) {
+      _display = "0.";
+      _shouldStartNewInput = false;
+    } else if (!_display.contains('.')) {
+      _display += ".";
+    }
+  }
+
+  // Toggle sign (+/-)
+  void _toggleSign() {
+    if (_display != '0000') {
+      if (_display.startsWith('-')) {
+        _display = _display.substring(1);
+      } else {
+        _display = "-$_display";
+      }
+    }
+  }
+
+  // Percentage (%)
+  void _calculatePercentage() {
+    double current = double.parse(_display);
+    _display = (current / 100).toString();
+  }
+
+  // Helper: Format number (remove trailing .0)
+  String _formatResult(double value) {
+    String s = value.toString();
+    if (s.endsWith(".0")) {
+      return s.substring(0, s.length - 2);
+    }
+    return s;
   }
 
   @override
@@ -80,6 +153,7 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            // --- DISPLAY SECTION ---
             Expanded(
               flex: 35,
               child: Container(
@@ -89,18 +163,17 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Display the expression being entered
-                    // Hiển thị biểu thức đang nhập
                     Text(
-                      input,
-                      style: const TextStyle(color: Colors.grey, fontSize: 24),
+                      _equation,
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 24,
+                      ),
                     ),
                     const SizedBox(height: 10),
-                    // Display large numbers (Result)
-                     // Hiển thị số lớn (Result)
                     FittedBox(
                       child: Text(
-                        result.isEmpty ? "0" : result,
+                        _display,
                         style: const TextStyle(
                           color: AppColors.textWhite,
                           fontSize: 60,
@@ -113,70 +186,24 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               ),
             ),
 
-            // --- KEYBOARD SECTION ---
+            // --- BUTTON SECTION ---
             Expanded(
               flex: 65,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 5,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // Line 1: C, (), %, /
-                    _buildRow(
-                      ['C', '( )', '%', '÷'],
-                      [
-                        AppColors.buttonClear,
-                        AppColors.buttonFunction,
-                        AppColors.buttonFunction,
-                        AppColors.buttonCalculations,
-                      ],
-                    ),
-
-                    // Line 2: 7, 8, 9, x
-                    _buildRow(
-                      ['7', '8', '9', '×'],
-                      [
-                        AppColors.buttonNumber,
-                        AppColors.buttonNumber,
-                        AppColors.buttonNumber,
-                        AppColors.buttonCalculations,
-                      ],
-                    ),
-
-                    // Line 3: 4, 5, 6, -
-                    _buildRow(
-                      ['4', '5', '6', '-'],
-                      [
-                        AppColors.buttonNumber,
-                        AppColors.buttonNumber,
-                        AppColors.buttonNumber,
-                        AppColors.buttonCalculations,
-                      ],
-                    ),
-
-                    // Line 4: 1, 2, 3, +
-                    _buildRow(
-                      ['1', '2', '3', '+'],
-                      [
-                        AppColors.buttonNumber,
-                        AppColors.buttonNumber,
-                        AppColors.buttonNumber,
-                        AppColors.buttonCalculations,
-                      ],
-                    ),
-                    // Line 5: 0, ., +/-, =
-                    _buildRow(
-                      ['+/-', '0', '.', '='],
-                      [
-                        AppColors.buttonFunction,
-                        AppColors.buttonNumber,
-                        AppColors.buttonNumber,
-                        AppColors.buttonCalculations,
-                      ],
-                    ),
+                    _buildRow(['C', '( )', '%', '÷'], 
+                        [AppColors.buttonClear, AppColors.buttonFunction, AppColors.buttonFunction, AppColors.buttonCalculations]),
+                    _buildRow(['7', '8', '9', '×'], 
+                        [AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonCalculations]),
+                    _buildRow(['4', '5', '6', '-'], 
+                        [AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonCalculations]),
+                    _buildRow(['1', '2', '3', '+'], 
+                        [AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonCalculations]),
+                    _buildRow(['+/-', '0', '.', '='], 
+                        [AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonNumber, AppColors.buttonEqual]),
                   ],
                 ),
               ),
@@ -187,40 +214,40 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     );
   }
 
-  // Function to build a single row of buttons
-  // Takes a list of labels and a list of colors corresponding to each button
-  // Hàm tạo một hàng nút duy nhất
-  // Lấy danh sách nhãn và danh sách màu tương ứng với mỗi nút
   Widget _buildRow(List<String> labels, List<Color> colors) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: List.generate(labels.length, (index) {
-        return _buildButton(labels[index], colors[index]);
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(4, (index) {
+        return _buildButton(
+          text: labels[index],
+          bgColor: colors[index],
+          onTap: () => onBtnTap(labels[index]),
+        );
       }),
     );
   }
 
-  // Function to build a single calculator button
-  // [text] = Button label
-  // [color] = Background color of the button
-  Widget _buildButton(String text, Color color) {
+  Widget _buildButton({
+    required String text,
+    required Color bgColor,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
-      // When user taps, call onBtnTap()
-      onTap: () => onBtnTap(text),
+      onTap: onTap,
       child: Container(
-        height: 90,
         width: 90,
+        height: 90,
         decoration: BoxDecoration(
-          color: color, // Button background color
-          shape: BoxShape.circle, // Make button circular
+          color: bgColor,
+          shape: BoxShape.circle,
         ),
         child: Center(
           child: Text(
             text,
             style: const TextStyle(
-              color: AppColors.textWhite, // Text color of button
-              fontSize: 26,
-              fontWeight: FontWeight.w500,
+              color: AppColors.textWhite,
+              fontSize: 48,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
